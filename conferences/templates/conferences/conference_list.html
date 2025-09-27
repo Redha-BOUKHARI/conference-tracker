@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>All Conferences</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .conference-row {
+            transition: all 0.3s ease;
+        }
+        .conference-row.hidden {
+            display: none;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(0, 0, 0, 0.075);
+        }
+        .search-match {
+            background-color: #e7f1ff;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'home' %}">
+                <i class="fas fa-calendar-alt"></i> Conference Tracker
+            </a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="{% url 'home' %}">Home</a>
+                <a class="nav-link active" href="{% url 'conference_list' %}">All Conferences</a>
+                <a class="nav-link" href="/admin/">Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Search and Filter Header -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="fas fa-search"></i> Conference Search</h4>
+                <span id="resultsCount" class="badge bg-light text-dark fs-6">Loading...</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <!-- Search Input -->
+                    <div class="col-md-6">
+                        <label for="liveSearch" class="form-label">Live Search</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="liveSearch" 
+                                   placeholder="Type to search conferences by name, acronym, or description..."
+                                   autocomplete="off">
+                            <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Deadline Filter -->
+                    <div class="col-md-3">
+                        <label for="deadlineFilter" class="form-label">Deadline Status</label>
+                        <select class="form-select" id="deadlineFilter">
+                            <option value="all">All Deadlines</option>
+                            <option value="urgent">🔴 Urgent (≤7 days)</option>
+                            <option value="soon">🟡 Soon (8-30 days)</option>
+                            <option value="future">🟢 Future (>30 days)</option>
+                            <option value="expired">⚫ Expired</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <a href="/admin/conferences/conference/add/" class="btn btn-success btn-sm">
+                                <i class="fas fa-plus"></i> Add Conference
+                            </a>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="clearAllFilters()">
+                                <i class="fas fa-sync"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Active Filters -->
+                <div id="activeFilters" class="mt-3" style="display: none;">
+                    <small class="text-muted">
+                        Active filters: 
+                        <span id="searchBadge" class="badge bg-info me-1" style="display: none;"></span>
+                        <span id="deadlineBadge" class="badge bg-warning me-1" style="display: none;"></span>
+                        <a href="javascript:void(0)" onclick="clearAllFilters()" class="text-danger">
+                            <i class="fas fa-times"></i> Clear all
+                        </a>
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conferences Table -->
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th width="30%">Conference Name</th>
+                        <th width="10%">Acronym</th>
+                        <th width="20%">Description</th>
+                        <th width="15%">Deadline</th>
+                        <th width="15%">Time Left</th>
+                        <th width="10%">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="conferencesTableBody">
+                    {% for conference in conferences %}
+                    <tr class="conference-row" 
+                        data-name="{{ conference.name|lower }}" 
+                        data-acronym="{{ conference.acronym|default:''|lower }}" 
+                        data-description="{{ conference.description|default:''|lower }}"
+                        data-days="{{ conference.days_until_deadline }}"
+                        data-website="{{ conference.website|default:'' }}">
+                        <td>
+                            <strong class="conference-name">{{ conference.name }}</strong>
+                            {% if conference.website %}
+                            <a href="{{ conference.website }}" target="_blank" class="text-decoration-none ms-1" title="Visit website">
+                                <i class="fas fa-external-link-alt fa-xs"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if conference.acronym %}
+                            <span class="badge bg-secondary conference-acronym">{{ conference.acronym }}</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="conference-description">
+                                {% if conference.description %}
+                                    {{ conference.description|truncatewords:15 }}
+                                {% else %}
+                                    <span class="text-muted">No description</span>
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="conference-deadline">{{ conference.submission_deadline|date:"M d, Y" }}</span>
+                        </td>
+                        <td>
+                            <span class="badge conference-days 
+                                {% if conference.days_until_deadline < 7 %}bg-danger
+                                {% elif conference.days_until_deadline < 30 %}bg-warning
+                                {% else %}bg-success{% endif %}">
+                                {{ conference.days_until_deadline }} days
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{% url 'conference_detail' conference.pk %}" class="btn btn-sm btn-outline-primary" title="View details">
+                                <i class="fas fa-eye"></i> Details
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                            No conferences found. <a href="/admin/conferences/conference/add/">Add the first one!</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- No Results Message (hidden by default) -->
+        <div id="noResults" class="text-center py-5" style="display: none;">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">No conferences match your search</h4>
+            <p class="text-muted">Try adjusting your search terms or filters</p>
+            <button class="btn btn-primary" onclick="clearAllFilters()">
+                <i class="fas fa-sync"></i> Show All Conferences
+            </button>
+        </div>
+
+        <!-- Back to Home -->
+        <div class="text-center mt-4">
+            <a href="{% url 'home' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Home
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Get elements
+        const conferenceRows = document.querySelectorAll('.conference-row');
+        const liveSearch = document.getElementById('liveSearch');
+        const deadlineFilter = document.getElementById('deadlineFilter');
+        const resultsCount = document.getElementById('resultsCount');
+        const noResults = document.getElementById('noResults');
+        const clearSearchBtn = document.getElementById('clearSearch');
+        const activeFilters = document.getElementById('activeFilters');
+        const searchBadge = document.getElementById('searchBadge');
+        const deadlineBadge = document.getElementById('deadlineBadge');
+        const tableBody = document.getElementById('conferencesTableBody');
+
+        let currentSearch = '';
+        let currentDeadline = 'all';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateResultsCount();
+            setupEventListeners();
+            liveSearch.focus();
+        });
+
+        function setupEventListeners() {
+            // Search input with debouncing
+            let searchTimeout;
+            liveSearch.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    currentSearch = this.value.toLowerCase().trim();
+                    updateActiveFilters();
+                    filterConferences();
+                }, 200);
+            });
+
+            // Deadline filter change
+            deadlineFilter.addEventListener('change', function() {
+                currentDeadline = this.value;
+                updateActiveFilters();
+                filterConferences();
+            });
+
+            // Clear search button
+            clearSearchBtn.addEventListener('click', function() {
+                liveSearch.value = '';
+                currentSearch = '';
+                updateActiveFilters();
+                filterConferences();
+                liveSearch.focus();
+            });
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                // Ctrl+K to focus search
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    liveSearch.focus();
+                    liveSearch.select();
+                }
+                // Escape to clear search
+                if (e.key === 'Escape' && document.activeElement === liveSearch) {
+                    liveSearch.value = '';
+                    currentSearch = '';
+                    updateActiveFilters();
+                    filterConferences();
+                }
+            });
+        }
+
+        function filterConferences() {
+            let visibleCount = 0;
+
+            conferenceRows.forEach(row => {
+                const name = row.dataset.name;
+                const acronym = row.dataset.acronym;
+                const description = row.dataset.description;
+                const days = parseInt(row.dataset.days);
+                
+                let matchesSearch = true;
+                let matchesDeadline = true;
+
+                // Check search term match
+                if (currentSearch) {
+                    matchesSearch = name.includes(currentSearch) || 
+                                  acronym.includes(currentSearch) || 
+                                  description.includes(currentSearch);
+                }
+
+                // Check deadline filter match
+                if (currentDeadline !== 'all') {
+                    if (currentDeadline === 'urgent') {
+                        matchesDeadline = days < 7 && days > 0;
+                    } else if (currentDeadline === 'soon') {
+                        matchesDeadline = days >= 7 && days < 30;
+                    } else if (currentDeadline === 'future') {
+                        matchesDeadline = days >= 30;
+                    } else if (currentDeadline === 'expired') {
+                        matchesDeadline = days < 0;
+                    }
+                }
+
+                // Show/hide row based on matches
+                if (matchesSearch && matchesDeadline) {
+                    row.classList.remove('hidden');
+                    visibleCount++;
+                    
+                    // Highlight search term
+                    if (currentSearch) {
+                        highlightSearchTerms(row, currentSearch);
+                    } else {
+                        removeHighlights(row);
+                    }
+                    
+                    // Add hover effect for matches
+                    row.classList.add('search-match');
+                } else {
+                    row.classList.add('hidden');
+                    removeHighlights(row);
+                    row.classList.remove('search-match');
+                }
+            });
+
+            // Update UI
+            updateResultsCount(visibleCount);
+            toggleNoResultsMessage(visibleCount);
+        }
+
+        function highlightSearchTerms(row, searchTerm) {
+            const textElements = row.querySelectorAll('.conference-name, .conference-acronym, .conference-description');
+            
+            textElements.forEach(element => {
+                const originalHTML = element.innerHTML;
+                const regex = new RegExp(`(${searchTerm})`, 'gi');
+                const highlightedHTML = originalHTML.replace(regex, '<span class="highlight">$1</span>');
+                element.innerHTML = highlightedHTML;
+            });
+        }
+
+        function removeHighlights(row) {
+            const highlightedElements = row.querySelectorAll('.highlight');
+            highlightedElements.forEach(highlight => {
+                const text = highlight.textContent;
+                highlight.outerHTML = text;
+            });
+        }
+
+        function updateResultsCount(visibleCount = conferenceRows.length) {
+            resultsCount.textContent = `${visibleCount} of ${conferenceRows.length}`;
+        }
+
+        function toggleNoResultsMessage(visibleCount) {
+            if (visibleCount === 0 && conferenceRows.length > 0) {
+                noResults.style.display = 'block';
+                tableBody.style.display = 'none';
+            } else {
+                noResults.style.display = 'none';
+                tableBody.style.display = '';
+            }
+        }
+
+        function updateActiveFilters() {
+            const hasSearch = currentSearch.length > 0;
+            const hasDeadline = currentDeadline !== 'all';
+
+            if (hasSearch || hasDeadline) {
+                activeFilters.style.display = 'block';
+                
+                if (hasSearch) {
+                    searchBadge.style.display = 'inline';
+                    searchBadge.textContent = `Search: ${currentSearch}`;
+                } else {
+                    searchBadge.style.display = 'none';
+                }
+
+                if (hasDeadline) {
+                    deadlineBadge.style.display = 'inline';
+                    deadlineBadge.textContent = `Deadline: ${deadlineFilter.options[deadlineFilter.selectedIndex].text}`;
+                } else {
+                    deadlineBadge.style.display = 'none';
+                }
+            } else {
+                activeFilters.style.display = 'none';
+            }
+        }
+
+        function clearAllFilters() {
+            liveSearch.value = '';
+            deadlineFilter.value = 'all';
+            currentSearch = '';
+            currentDeadline = 'all';
+            updateActiveFilters();
+            filterConferences();
+            liveSearch.focus();
+        }
+    </script>
+</body>
+</html>
